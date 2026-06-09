@@ -3,25 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HardingTasks - Pi Network App</title>
+    <title>HardingTasks - Pi Secure Auth</title>
     <script src="https://sdk.minepi.com/pi-sdk.js"></script>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 450px;
-        }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
         h1 { color: #57419d; text-align: center; margin-bottom: 5px; }
         .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 20px; }
         .pi-user { background: #fff9e6; border: 1px solid #ffe0b2; padding: 10px; border-radius: 8px; font-size: 13px; text-align: center; margin-bottom: 20px; color: #e65100; }
@@ -29,6 +15,7 @@
         input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
         button { background: #57419d; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
         button:hover { background: #43327d; }
+        .btn-auth { background: #e65100; color: white; width: 100%; margin-bottom: 15px; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; display: none; }
         ul { list-style: none; padding: 0; }
         li { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f9f9f9; border-bottom: 1px solid #eee; border-radius: 6px; margin-bottom: 8px; cursor: pointer; }
         li.completed { text-decoration: line-through; color: #aaa; background: #e8f5e9; }
@@ -38,9 +25,10 @@
 
 <div class="container">
     <h1>HardingTasks 🚀</h1>
-    <div class="subtitle">Pi Network Ecosystem - Vibe Coder Edition</div>
+    <div class="subtitle">Pi Network Ecosystem - Secure Vibe Coder</div>
     
-    <div id="pi-status" class="pi-user">Connecting to Pi Network...</div>
+    <div id="pi-status" class="pi-user">Initializing Pi SDK...</div>
+    <button id="auth-button" class="btn-auth" onclick="handleAuthentication()">Sign In with Pi Network</button>
 
     <div class="input-group">
         <input type="text" id="task-input" placeholder="Add a new task...">
@@ -51,15 +39,52 @@
 </div>
 
 <script>
-    // Initializing the Pi Network SDK for Testnet (Sandbox)
-    try {
-        Pi.init({ version: "2.0", sandbox: true });
-        document.getElementById('pi-status').innerText = "Successfully connected to Pi Browser (Testnet)";
-    } catch (e) {
-        document.getElementById('pi-status').innerText = "Local Mode (Open in Pi Browser to run SDK)";
+    let isInitialized = false;
+
+    async function initPiSDK() {
+        try {
+            // Attente de l'initialisation complète (Promise)
+            await Pi.init({ version: "2.0", sandbox: true });
+            isInitialized = true;
+            document.getElementById('pi-status').innerText = "Pi SDK Ready. Authenticating...";
+            await handleAuthentication();
+        } catch (e) {
+            document.getElementById('pi-status').innerText = "Open inside Pi Browser to connect.";
+            document.getElementById('auth-button').style.display = "block";
+        }
     }
 
-    // Load tasks on startup
+    async function handleAuthentication() {
+        if (!isInitialized) return;
+        try {
+            const scopes = ['username'];
+            
+            // Authentification native Pi
+            const auth = await Pi.authenticate(scopes, onIncompletePaymentFound);
+            
+            // Transmission du jeton d'accès au Backend
+            const response = await fetch('/auth/pi', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accessToken: auth.accessToken })
+            });
+
+            const data = await response.json();
+            if (data.status === "success") {
+                document.getElementById('pi-status').innerText = `Welcome, @${auth.user.username}! Verified Session.`;
+                document.getElementById('auth-button').style.display = "none";
+                loadTasks();
+            }
+        } catch (error) {
+            document.getElementById('pi-status').innerText = "Authentication failed. Try again.";
+            document.getElementById('auth-button').style.display = "block";
+        }
+    }
+
+    function onIncompletePaymentFound(payment) {
+        // Optionnel : Gestion des paiements interrompus
+    }
+
     async function loadTasks() {
         const res = await fetch('/api/tasks');
         const tasks = await res.json();
@@ -74,11 +99,9 @@
         });
     }
 
-    // Add a new task
     async function addTask() {
         const input = document.getElementById('task-input');
         if (!input.value.trim()) return;
-
         await fetch('/api/tasks', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -88,13 +111,13 @@
         loadTasks();
     }
 
-    // Toggle task completion status
     async function toggleTask(id) {
         await fetch(`/api/tasks/${id}`, { method: 'PUT' });
         loadTasks();
     }
 
-    loadTasks();
+    // Chargement automatique au démarrage
+    window.addEventListener('DOMContentLoaded', initPiSDK);
 </script>
 </body>
 </html>
